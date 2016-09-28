@@ -994,8 +994,8 @@ var parseQueryString = function(string) {
 	if (string === "" || string == null) return {}
 	if (string.charAt(0) === "?") string = string.slice(1)
 	var entries = string.split("&"), data0 = {}, counters = {}
-	for (var i = 0; i < entries.length; i++) {
-		var entry = entries[i].split("=")
+	for (var i1 = 0; i1 < entries.length; i1++) {
+		var entry = entries[i1].split("=")
 		var key3 = decodeURIComponent(entry[0])
 		var value4 = entry.length === 2 ? decodeURIComponent(entry[1]) : ""
 		//TODO refactor out
@@ -1038,12 +1038,12 @@ var coreRouter = function($window) {
 		return data
 	}
 	var asyncId
-	function debounceAsync(f) {
+	function debounceAsync(f0) {
 		return function() {
 			if (asyncId != null) return
 			asyncId = callAsync(function() {
 				asyncId = null
-				f()
+				f0()
 			})
 		}
 	}
@@ -1091,7 +1091,7 @@ var coreRouter = function($window) {
 		}
 		else $window.location.href = prefix1 + path
 	}
-	function defineRoutes(routes, resolve1, reject0) {
+	function defineRoutes(routes, resolve0, reject0) {
 		if (supportsPushState) $window.onpopstate = debounceAsync(resolveRoute)
 		else if (prefix1.charAt(0) === "#") $window.onhashchange = resolveRoute
 		resolveRoute()
@@ -1107,10 +1107,10 @@ var coreRouter = function($window) {
 					pathname.replace(matcher, function() {
 						var keys = route0.match(/:[^\/]+/g) || []
 						var values = [].slice.call(arguments, 1, -2)
-						for (var i = 0; i < keys.length; i++) {
-							params[keys[i].replace(/:|\./g, "")] = decodeURIComponent(values[i])
+						for (var i0 = 0; i0 < keys.length; i0++) {
+							params[keys[i0].replace(/:|\./g, "")] = decodeURIComponent(values[i0])
 						}
-						resolve1(routes[route0], params, path, route0)
+						resolve0(routes[route0], params, path, route0)
 					})
 					return
 				}
@@ -1131,7 +1131,7 @@ var coreRouter = function($window) {
 }
 var _25 = function($window, mount0) {
 	var router = coreRouter($window)
-	var currentResolve, currentComponent, currentRender, currentArgs, currentPath
+	var currentComponent, currentRender, currentArgs, currentPath
 	var RouteComponent = {view: function() {
 		return currentRender(Vnode(currentComponent, null, currentArgs, undefined, undefined, undefined))
 	}}
@@ -1144,26 +1144,30 @@ var _25 = function($window, mount0) {
 		currentArgs = null
 		mount0(root, RouteComponent)
 		router.defineRoutes(routes, function(payload, args0, path) {
-			var isResolver = typeof payload.view !== "function"
-			var render1 = defaultRender
-			var resolve0 = currentResolve = function (component) {
-				if (resolve0 !== currentResolve) return
-				currentResolve = null
-				currentComponent = component != null ? component : isResolver ? "div" : payload
-				currentRender = render1
-				currentArgs = args0
-				currentPath = path
+			var routeCtx = {}
+			var hasMiddleware = typeof payload.middleware === "object"
+			if (hasMiddleware) {
+				var queue = function(funcs, routeCtx) {
+					var i = 0;
+					function next() {
+						if (funcs.length !== i) {
+							var f = funcs[i];
+							f.call(payload, args0, routeCtx, next)
+							i++;
+						} else {
+							done()
+						}
+					}
+					next()
+				};
+				queue(payload.middleware, routeCtx)
+			} else {
+				done()
+			}
+			function done() {
+				currentRender = payload.render.bind(payload, args0, routeCtx, path)
 				root.redraw(true)
 			}
-			var onmatch = function() {
-				resolve0()
-			}
-			if (isResolver) {
-				if (typeof payload.render === "function") render1 = payload.render.bind(payload)
-				if (typeof payload.onmatch === "function") onmatch = payload.onmatch
-			}
-		
-			onmatch.call(payload, resolve0, args0, path)
 		}, function() {
 			router.setPath(defaultRoute, null, {replace: true})
 		})

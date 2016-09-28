@@ -5,7 +5,7 @@ var coreRouter = require("../router/router")
 
 module.exports = function($window, mount) {
 	var router = coreRouter($window)
-	var currentResolve, currentComponent, currentRender, currentArgs, currentPath
+	var currentComponent, currentRender, currentArgs, currentPath
 
 	var RouteComponent = {view: function() {
 		return currentRender(Vnode(currentComponent, null, currentArgs, undefined, undefined, undefined))
@@ -14,6 +14,7 @@ module.exports = function($window, mount) {
 		return vnode
 	}
 	var route = function(root, defaultRoute, routes) {
+
 		currentComponent = "div"
 		currentRender = defaultRender
 		currentArgs = null
@@ -21,29 +22,34 @@ module.exports = function($window, mount) {
 		mount(root, RouteComponent)
 
 		router.defineRoutes(routes, function(payload, args, path) {
-			var isResolver = typeof payload.view !== "function"
-			var render = defaultRender
 
-			var resolve = currentResolve = function (component) {
-				if (resolve !== currentResolve) return
-				currentResolve = null
+			var routeCtx = {}
+			var hasMiddleware = typeof payload.middleware === "object"
 
-				currentComponent = component != null ? component : isResolver ? "div" : payload
-				currentRender = render
-				currentArgs = args
-				currentPath = path
+			if (hasMiddleware) {
+				var queue = function(funcs, routeCtx) {
+					var i = 0;
+					function next() {
+						if (funcs.length !== i) {
+							var f = funcs[i];
+							f.call(payload, args, routeCtx, next)
+							i++;
+						} else {
+							done()
+						}
+					}
+					next()
+				};
+				queue(payload.middleware, routeCtx)
+			} else {
+				done()
+			}
 
+			function done() {
+				currentRender = payload.render.bind(payload, args, routeCtx, path)
 				root.redraw(true)
 			}
-			var onmatch = function() {
-				resolve()
-			}
-			if (isResolver) {
-				if (typeof payload.render === "function") render = payload.render.bind(payload)
-				if (typeof payload.onmatch === "function") onmatch = payload.onmatch
-			}
-		
-			onmatch.call(payload, resolve, args, path)
+
 		}, function() {
 			router.setPath(defaultRoute, null, {replace: true})
 		})
